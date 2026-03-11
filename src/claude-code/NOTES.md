@@ -24,9 +24,10 @@ To avoid re-authenticating inside the devcontainer, you can share your host mach
         }
     },
     "mounts": [
-        "source=${localEnv:HOME}/.claude,target=/claude-host-config,type=bind"
+        "source=${localEnv:HOME}/.claude,target=/claude-host-config,type=bind",
+        "source=${localEnv:HOME}/.claude.json,target=/claude-host-credentials,type=bind"
     ]
 }
 ```
 
-When the container starts, `~/.claude` will be symlinked to the mounted host config directory. This shares authentication tokens and settings from your host machine.
+When the container starts, `~/.claude` and `~/.claude.json` will be symlinked to the mounted host paths. This shares authentication credentials and settings from your host machine.

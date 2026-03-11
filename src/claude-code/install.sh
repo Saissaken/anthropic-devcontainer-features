@@ -128,12 +128,22 @@ if [ -d "$MOUNT_PATH" ]; then
     echo "Claude session shared: $USER_HOME/.claude -> $MOUNT_PATH"
 else
     echo "WARNING: shareSession is enabled but $MOUNT_PATH is not mounted."
-    echo "Add the following mount to your devcontainer.json:"
+    echo "Add the following mounts to your devcontainer.json:"
     echo ""
     echo '  "mounts": ['
-    echo '    "source=${localEnv:HOME}/.claude,target=/claude-host-config,type=bind"'
+    echo '    "source=${localEnv:HOME}/.claude,target=/claude-host-config,type=bind",'
+    echo '    "source=${localEnv:HOME}/.claude.json,target=/claude-host-credentials,type=bind"'
     echo '  ]'
     echo ""
+fi
+
+CREDENTIALS_PATH="/claude-host-credentials"
+if [ -f "$CREDENTIALS_PATH" ]; then
+    if [ -e "$USER_HOME/.claude.json" ] || [ -L "$USER_HOME/.claude.json" ]; then
+        rm -f "$USER_HOME/.claude.json"
+    fi
+    ln -s "$CREDENTIALS_PATH" "$USER_HOME/.claude.json"
+    echo "Claude credentials shared: $USER_HOME/.claude.json -> $CREDENTIALS_PATH"
 fi
 SCRIPT
 
