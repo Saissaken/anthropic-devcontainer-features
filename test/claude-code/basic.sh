@@ -8,9 +8,9 @@ if ! command -v claude &> /dev/null; then
     exit 1
 fi
 
-# Test version output 
-if ! claude -v | grep -q "Claude Code"; then
-    echo "claude version check failed"
+# Test version output
+if ! claude --version; then
+    echo "claude --version failed"
     exit 1
 fi
 

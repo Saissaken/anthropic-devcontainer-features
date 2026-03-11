@@ -1,7 +1,9 @@
 #!/bin/sh
 set -eu
 
-# Function to detect the package manager and OS type
+SHARE_SESSION="${SHARESESSION:-false}"
+
+# Function to detect the package manager
 detect_package_manager() {
     for pm in apt-get apk dnf yum; do
         if command -v $pm >/dev/null; then
@@ -21,7 +23,7 @@ install_packages() {
     local pkg_manager="$1"
     shift
     local packages="$@"
-    
+
     case "$pkg_manager" in
         apt)
             apt-get update
@@ -38,84 +40,8 @@ install_packages() {
             return 1
             ;;
     esac
-    
+
     return 0
-}
-
-# Function to install Node.js
-install_nodejs() {
-    local pkg_manager="$1"
-    
-    echo "Installing Node.js using $pkg_manager..."
-    
-    case "$pkg_manager" in
-        apt)
-            # Debian/Ubuntu - install more recent Node.js LTS
-            install_packages apt "ca-certificates curl gnupg"
-            mkdir -p /etc/apt/keyrings
-            curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg
-            echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_18.x nodistro main" | tee /etc/apt/sources.list.d/nodesource.list
-            apt-get update
-            apt-get install -y nodejs
-            ;;
-        apk)
-            # Alpine
-            install_packages apk "nodejs npm"
-            ;;
-        dnf)
-            # Fedora/RHEL
-            install_packages dnf "nodejs npm"
-            ;;
-        yum)
-            # CentOS/RHEL
-            curl -sL https://rpm.nodesource.com/setup_18.x | bash -
-            yum install -y nodejs
-            ;;
-        *)
-            echo "ERROR: Unsupported package manager for Node.js installation"
-            return 1
-            ;;
-    esac
-    
-    # Verify installation
-    if command -v node >/dev/null && command -v npm >/dev/null; then
-        echo "Successfully installed Node.js and npm"
-        return 0
-    else
-        echo "Failed to install Node.js and npm"
-        return 1
-    fi
-}
-
-# Function to install Claude Code CLI
-install_claude_code() {
-    echo "Installing Claude Code CLI..."
-    npm install -g @anthropic-ai/claude-code
-
-    if command -v claude >/dev/null; then
-        echo "Claude Code CLI installed successfully!"
-        claude --version
-        return 0
-    else
-        echo "ERROR: Claude Code CLI installation failed!"
-        return 1
-    fi
-}
-
-# Print error message about requiring Node.js feature
-print_nodejs_requirement() {
-    cat <<EOF
-
-ERROR: Node.js and npm are required but could not be installed!
-Please add the Node.js feature to your devcontainer.json:
-
-  "features": {
-    "ghcr.io/devcontainers/features/node:1": {},
-    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
-  }
-
-EOF
-    exit 1
 }
 
 # Main script starts here
@@ -126,14 +52,80 @@ main() {
     PKG_MANAGER=$(detect_package_manager)
     echo "Detected package manager: $PKG_MANAGER"
 
-    # Try to install Node.js if it's not available
-    if ! command -v node >/dev/null || ! command -v npm >/dev/null; then
-        echo "Node.js or npm not found, attempting to install automatically..."
-        install_nodejs "$PKG_MANAGER" || print_nodejs_requirement
+    # Ensure curl and bash are available
+    if ! command -v curl >/dev/null || ! command -v bash >/dev/null; then
+        echo "Installing curl and bash..."
+        install_packages "$PKG_MANAGER" curl bash
     fi
 
-    # Install Claude Code CLI
-    install_claude_code || exit 1
+    # Install Alpine-specific dependencies
+    if [ "$PKG_MANAGER" = "apk" ]; then
+        echo "Installing Alpine-specific dependencies..."
+        install_packages apk libgcc libstdc++ ripgrep
+    fi
+
+    # Install Claude Code using the native installer
+    echo "Installing Claude Code via native installer..."
+    curl -fsSL https://claude.ai/install.sh | bash
+
+    # Copy the binary to /usr/local/bin for multi-user access
+    if [ -f "$HOME/.local/bin/claude" ]; then
+        cp "$(readlink -f "$HOME/.local/bin/claude")" /usr/local/bin/claude
+        chmod 755 /usr/local/bin/claude
+    else
+        echo "ERROR: Claude binary not found at ~/.local/bin/claude after installation"
+        exit 1
+    fi
+
+    # Verify installation
+    if command -v claude >/dev/null; then
+        echo "Claude Code CLI installed successfully!"
+        claude --version
+    else
+        echo "ERROR: Claude Code CLI installation failed!"
+        exit 1
+    fi
+
+    # Generate the session setup helper script
+    cat > /usr/local/bin/setup-claude-session << 'SCRIPT'
+#!/bin/sh
+SHARE_SESSION="__SHARE_SESSION__"
+
+if [ "$SHARE_SESSION" != "true" ]; then
+    exit 0
+fi
+
+# Detect current user's home directory
+CURRENT_USER=$(whoami)
+USER_HOME=$(getent passwd "$CURRENT_USER" | cut -d: -f6)
+
+if [ -z "$USER_HOME" ]; then
+    USER_HOME="$HOME"
+fi
+
+MOUNT_PATH="/claude-host-config"
+
+if [ -d "$MOUNT_PATH" ]; then
+    # Remove existing ~/.claude if it exists (file, dir, or symlink)
+    if [ -e "$USER_HOME/.claude" ] || [ -L "$USER_HOME/.claude" ]; then
+        rm -rf "$USER_HOME/.claude"
+    fi
+    ln -s "$MOUNT_PATH" "$USER_HOME/.claude"
+    echo "Claude session shared: $USER_HOME/.claude -> $MOUNT_PATH"
+else
+    echo "WARNING: shareSession is enabled but $MOUNT_PATH is not mounted."
+    echo "Add the following mount to your devcontainer.json:"
+    echo ""
+    echo '  "mounts": ['
+    echo '    "source=${localEnv:HOME}/.claude,target=/claude-host-config,type=bind"'
+    echo '  ]'
+    echo ""
+fi
+SCRIPT
+
+    # Inject the SHARE_SESSION value
+    sed -i "s|__SHARE_SESSION__|${SHARE_SESSION}|g" /usr/local/bin/setup-claude-session
+    chmod 755 /usr/local/bin/setup-claude-session
 }
 
 # Execute main function

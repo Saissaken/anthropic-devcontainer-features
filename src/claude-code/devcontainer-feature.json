@@ -1,9 +1,16 @@
 {
     "name": "Claude Code CLI",
     "id": "claude-code",
-    "version": "1.0.5",
-    "description": "Installs the Claude Code CLI globally",
-    "options": {},
+    "version": "2.0.0",
+    "description": "Installs the Claude Code CLI globally using the native installer",
+    "options": {
+        "shareSession": {
+            "type": "boolean",
+            "default": false,
+            "description": "Symlinks ~/.claude to /claude-host-config. Requires a bind mount in devcontainer.json."
+        }
+    },
+    "postStartCommand": "/usr/local/bin/setup-claude-session",
     "documentationURL": "https://github.com/anthropics/devcontainer-features/tree/main/src/claude-code",
     "licenseURL": "https://github.com/anthropics/devcontainer-features/blob/main/LICENSE",
     "customizations": {
@@ -12,8 +19,5 @@
                 "anthropic.claude-code"
             ]
         }
-    },
-    "installsAfter": [
-        "ghcr.io/devcontainers/features/node"
-    ]
+    }
 }

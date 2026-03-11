@@ -13,13 +13,26 @@ To use this feature in your devcontainer, add it to your `devcontainer.json` fil
 
 ```json
 "features": {
-    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+    "ghcr.io/anthropics/devcontainer-features/claude-code:2": {}
 }
 ```
 
-## Requirements
+### Sharing your host session
 
-The feature automatically depends on Node.js and will install it if not already present.
+To share your host Claude session with the devcontainer:
+
+```json
+{
+    "features": {
+        "ghcr.io/anthropics/devcontainer-features/claude-code:2": {
+            "shareSession": true
+        }
+    },
+    "mounts": [
+        "source=${localEnv:HOME}/.claude,target=/claude-host-config,type=bind"
+    ]
+}
+```
 
 ## Building and Testing
 
