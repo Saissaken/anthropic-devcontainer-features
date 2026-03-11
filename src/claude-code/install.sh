@@ -64,9 +64,23 @@ main() {
         install_packages apk libgcc libstdc++ ripgrep
     fi
 
-    # Install Claude Code using the native installer
+    # Install Claude Code using the native installer (with retry for rate limits)
     echo "Installing Claude Code via native installer..."
-    curl -fsSL https://claude.ai/install.sh | bash
+    MAX_RETRIES=5
+    RETRY_DELAY=5
+    for i in $(seq 1 $MAX_RETRIES); do
+        echo "Attempt $i of $MAX_RETRIES..."
+        if curl -fsSL https://claude.ai/install.sh | bash; then
+            break
+        fi
+        if [ "$i" = "$MAX_RETRIES" ]; then
+            echo "ERROR: Native installer failed after $MAX_RETRIES attempts"
+            exit 1
+        fi
+        echo "Installer failed, retrying in ${RETRY_DELAY}s..."
+        sleep $RETRY_DELAY
+        RETRY_DELAY=$((RETRY_DELAY * 2))
+    done
 
     # Copy the binary to /usr/local/bin for multi-user access
     if [ -f "$HOME/.local/bin/claude" ]; then
